@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Digital Dice Simulator</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f6f8;--card:#fff;--text:#1a2330;--muted:#6b7785;--off:#e3e7ec;--on:#e8260c;--line:#d5dbe2;--btn:#1f6feb;--btnt:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1319;--card:#161d26;--text:#e8edf2;--muted:#8b97a5;--off:#222b36;--on:#ff4a2e;--line:#2a3441;--btn:#3b82f6;--btnt:#fff}}
+:root[data-theme="dark"]{--bg:#0e1319;--card:#161d26;--text:#e8edf2;--muted:#8b97a5;--off:#222b36;--on:#ff4a2e;--line:#2a3441;--btn:#3b82f6;--btnt:#fff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.4rem;margin:0 0 4px}
+p.sub{margin:0 0 18px;color:var(--muted);font-size:.92rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.disp{display:flex;justify-content:center;background:#0b0f14;border-radius:10px;padding:18px}
+svg.seg{width:130px;height:auto}
+.seg rect{fill:#2a1512;transition:fill .05s}
+.seg rect.on{fill:var(--on);filter:drop-shadow(0 0 4px var(--on))}
+.btnrow{display:flex;justify-content:center;margin-top:16px}
+button.push{background:var(--btn);color:var(--btnt);border:0;border-radius:999px;padding:14px 34px;font-size:1.05rem;font-weight:600;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.25);transition:transform .08s,box-shadow .08s}
+button.push:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+button.push:disabled{opacity:.6;cursor:wait}
+.hint{text-align:center;color:var(--muted);font-size:.8rem;margin-top:8px}
+h2{font-size:1rem;margin:0 0 10px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem;text-align:center}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line)}
+td.hi{background:var(--on);color:#fff;font-weight:700;border-radius:4px}
+tr.active td:first-child{font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center}
+.stats div{background:var(--bg);border-radius:8px;padding:8px 0;font-size:.8rem;color:var(--muted)}
+.stats b{display:block;font-size:1.1rem;color:var(--text)}
+.hist{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
+.hist span{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 10px;font-weight:600}
+code{background:var(--bg);padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎲 Digital Dice</h1>
+  <p class="sub">Press the push button and the 7-segment display shows a random number from 1 to 6.</p>
+
+  <div class="card">
+    <div class="disp">
+      <svg class="seg" viewBox="0 0 100 160" aria-label="7-segment display">
+        <rect id="sa" x="16" y="6" width="68" height="12" rx="5"/>
+        <rect id="sb" x="82" y="16" width="12" height="62" rx="5"/>
+        <rect id="sc" x="82" y="82" width="12" height="62" rx="5"/>
+        <rect id="sd" x="16" y="142" width="68" height="12" rx="5"/>
+        <rect id="se" x="6" y="82" width="12" height="62" rx="5"/>
+        <rect id="sf" x="6" y="16" width="12" height="62" rx="5"/>
+        <rect id="sg" x="16" y="74" width="68" height="12" rx="5"/>
+      </svg>
+    </div>
+    <div class="btnrow"><button class="push" id="btn">PUSH TO ROLL</button></div>
+    <div class="hint">or press the Space bar</div>
+  </div>
+
+  <div class="card">
+    <h2>Segment truth table (1 = segment ON)</h2>
+    <div class="scroll"><table id="tt"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Roll history</h2>
+    <div class="hist" id="hist"></div>
+    <h2 style="margin-top:14px">Count of each face</h2>
+    <div class="stats" id="stats"></div>
+  </div>
+</div>
+
+<script>
+const SEGS=['a','b','c','d','e','f','g'];
+const MAP={1:'bc',2:'abged',3:'abgcd',4:'fgbc',5:'afgcd',6:'afgecd'};
+const el=id=>document.getElementById(id);
+const btn=el('btn');
+let counts=[0,0,0,0,0,0],history=[],rolling=false;
+
+function show(n){
+  SEGS.forEach(s=>el('s'+s).classList.toggle('on',n&&MAP[n].includes(s)));
+  document.querySelectorAll('#tt tr[data-n]').forEach(r=>r.classList.toggle('active',+r.dataset.n===n));
+}
+function buildTable(){
+  let h='<tr><th>Number</th>'+SEGS.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
+  for(let n=1;n<=6;n++){
+    h+='<tr data-n="'+n+'"><td>'+n+'</td>'+SEGS.map(s=>{const on=MAP[n].includes(s);return '<td class="'+(on?'hi':'')+'">'+(on?1:0)+'</td>'}).join('')+'</tr>';
+  }
+  el('tt').innerHTML=h;
+}
+function renderStats(){
+  el('stats').innerHTML=counts.map((c,i)=>'<div>'+(i+1)+'<b>'+c+'</b></div>').join('');
+  el('hist').innerHTML=history.slice(-12).map(n=>'<span>'+n+'</span>').join('')||'<span style="opacity:.5">No rolls yet</span>';
+}
+function roll(){
+  if(rolling)return;
+  rolling=true;btn.disabled=true;
+  let ticks=0,total=14;
+  const t=setInterval(()=>{
+    show(1+Math.floor(Math.random()*6));
+    ticks++;
+    if(ticks>=total){
+      clearInterval(t);
+      const r=1+Math.floor(Math.random()*6);
+      show(r);counts[r-1]++;history.push(r);renderStats();
+      rolling=false;btn.disabled=false;
+    }
+  },70);
+}
+btn.addEventListener('click',roll);
+document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();roll();}});
+buildTable();renderStats();show(0);
+</script>
+</body>
+</html>
